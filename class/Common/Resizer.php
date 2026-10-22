@@ -24,22 +24,22 @@ namespace XoopsModules\Wglinks\Common;
  */
 class Resizer
 {
-    public $sourceFile    = '';
-    public $endFile       = '';
-    public $maxWidth      = 0;
-    public $maxHeight     = 0;
-    public $imageMimetype = '';
-    public $jpgQuality    = 90;
-    public $mergeType     = 0;
-    public $mergePos      = 0;
-    public $degrees       = 0;
-    public $error         = '';
+    public string $sourceFile    = '';
+    public string $endFile       = '';
+    public int $maxWidth      = 0;
+    public int $maxHeight     = 0;
+    public string $imageMimetype = '';
+    public int $jpgQuality    = 90;
+    public int $mergeType     = 0;
+    public int $mergePos      = 0;
+    public int $degrees       = 0;
+    public string $error         = '';
 
     /**
      * resize image if size exceed given width/height
      * @return string|bool
      */
-    public function resizeImage()
+    public function resizeImage(): bool|string
     {
         // check file extension
         switch ($this->imageMimetype) {
@@ -72,14 +72,14 @@ class Resizer
                 } else {
                     $new_width  = $this->maxWidth;
                     $divisor    = $width / $new_width;
-                    $new_height = \floor($height / $divisor);
+                    $new_height = (int)\floor($height / $divisor);
                 }
             } elseif ($height < $this->maxHeight) {
                 $new_height = $height;
             } else {
                 $new_height = $this->maxHeight;
                 $divisor    = $height / $new_height;
-                $new_width  = \floor($width / $divisor);
+                $new_width  = (int)\floor($width / $divisor);
             }
 
             // Create a new temporary image.
@@ -103,13 +103,9 @@ class Resizer
                     \imagegif($tmpimg, $this->endFile);
                     break;
             }
-
-            // release the memory
-            \imagedestroy($tmpimg);
         } else {
             return 'copy';
         }
-        \imagedestroy($img);
 
         return true;
     }
@@ -117,7 +113,7 @@ class Resizer
     /**
      * @return bool|string
      */
-    public function resizeAndCrop()
+    public function resizeAndCrop(): bool|string
     {
         // check file extension
         switch ($this->imageMimetype) {
@@ -237,14 +233,12 @@ class Resizer
         }
         \imagejpeg($dest, $this->endFile);
 
-        \imagedestroy($src);
-        \imagedestroy($dest);
     }
 
     /**
      * @return bool|string
      */
-    public function rotateImage()
+    public function rotateImage(): bool|string
     {
         // check file extension
         switch ($this->imageMimetype) {
@@ -286,9 +280,6 @@ class Resizer
                 }
                 break;
         }
-
-        // release the memory
-        \imagedestroy($tmpimg);
 
         return true;
     }

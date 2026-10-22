@@ -19,6 +19,7 @@
  */
 
 use Xmf\Request;
+use XoopsModules\Wglinks\Common\Resizer;
 
 include __DIR__ . '/header.php';
 // It recovered the value of argument op in URL$
@@ -105,45 +106,87 @@ switch($op) {
         $linksObj->setVar('link_address', Request::getString('link_address'));
         $linksObj->setVar('link_weight', Request::getInt('link_weight'));
         // Set Var link_logo
-        $fileName = $_FILES['attachedfile']['name'];
-        if (\strlen($fileName) > 0) {
-            $imageMimetype = $_FILES['attachedfile']['type'];
-            include_once \XOOPS_ROOT_PATH .'/class/uploader.php';
-            $uploader = new \XoopsMediaUploader(\WGLINKS_UPLOAD_IMAGE_PATH . '/links/large/', $helper->getConfig('mimetypes'), $helper->getConfig('maxsize'), null, null);
-            if($uploader->fetchMedia($_POST['xoops_upload_file'][0])) {
-                $extension = \preg_replace('/^.+\.([^.]+)$/sU', '', $fileName);
-                $imgName = \str_replace(' ', '', Request::getString('link_name')) . '.' . $extension;
-                $uploader->setPrefix($imgName);
-                $uploader->fetchMedia($_POST['xoops_upload_file'][0]);
-                if (!$uploader->upload()) {
-                    $errors = $uploader->getErrors();
-                    \redirect_header('javascript:history.go(-1)', 3, $errors);
-                } else {
+        $uploaderErrors = '';
+        $linkFile = Request::getArray('attachedfile', [], 'FILES');
+        $filename = $linkFile['name'];
+        if ('' !== (string)$filename) {
+            require_once \XOOPS_ROOT_PATH . '/class/uploader.php';
+            $uploadFile0 = Request::getArray('xoops_upload_file')[0];
+            $imgMimetype = $linkFile['type'];
+            $imgNameDef = trim(preg_replace('/[^a-z0-9]+/', '-', \strtolower(Request::getString('link_name'))));
+            if ('' === $imgNameDef) {
+                $imgNameDef = 'image';
+            }
+            $uploader = new \XoopsMediaUploader(\WGLINKS_UPLOAD_IMAGE_PATH . '/links/large/',
+                $helper->getConfig('mimetypes'),
+                $helper->getConfig('maxsize'), null, null);
+            if (!empty($uploadFile0) && $uploader->fetchMedia($uploadFile0)) {
+                $uploader->setPrefix($imgNameDef);
+                if ($uploader->upload()) {
                     $savedFilename = $uploader->getSavedFileName();
-                    $linksObj->setVar('link_logo', $savedFilename);
-                    // resize image
-                    include_once \XOOPS_ROOT_PATH . '/modules/wglinks/include/imagehandler.php';
-                    // resize large image
-                    $maxwidth = $helper->getConfig('maxwidth_large');
-                    $maxheight = $helper->getConfig('maxheight_large');
-                    $ret = ResizeImage(\WGLINKS_UPLOAD_IMAGE_PATH . '/links/large/' . $savedFilename, \WGLINKS_UPLOAD_IMAGE_PATH . '/links/large/' . $savedFilename, $maxwidth, $maxheight, $imageMimetype);
+                    $maxwidth  = (int)$helper->getConfig('maxwidth_large');
+                    $maxheight = (int)$helper->getConfig('maxheight_large');
+                    if ($maxwidth > 0 && $maxheight > 0) {
+                        // resize large image
+                        $imgHandler                = new Resizer();
+                        $imgHandler->sourceFile    = \WGLINKS_UPLOAD_IMAGE_PATH . '/links/large/' . $savedFilename;
+                        $imgHandler->endFile       = \WGLINKS_UPLOAD_IMAGE_PATH . '/links/large/' . $savedFilename;
+                        $imgHandler->imageMimetype = $imgMimetype;
+                        $imgHandler->maxWidth      = $maxwidth;
+                        $imgHandler->maxHeight     = $maxheight;
+                        $result                    = $imgHandler->resizeImage();
+                    }
                     // resize thumb image
-                    $maxwidth = $helper->getConfig('maxwidth_thumbs');
-                    $maxheight = $helper->getConfig('maxheight_thumbs');
-                    $ret = ResizeImage(\WGLINKS_UPLOAD_IMAGE_PATH . '/links/large/' . $savedFilename, \WGLINKS_UPLOAD_IMAGE_PATH . '/links/thumbs/' . $savedFilename, $maxwidth, $maxheight, $imageMimetype);
+                    $thumbFile = \WGLINKS_UPLOAD_IMAGE_PATH . '/links/thumbs/' . $savedFilename;
+                    $largeFile = \WGLINKS_UPLOAD_IMAGE_PATH . '/links/large/' . $savedFilename;
+                    if ($maxwidth > 0 && $maxheight > 0) {
+                            $imgHandler                = new Resizer();
+                            $imgHandler->sourceFile    = $largeFile;
+                            $imgHandler->endFile       = $thumbFile;
+                            $imgHandler->imageMimetype = $imgMimetype;
+                            $imgHandler->maxWidth      = $maxwidth;
+                            $imgHandler->maxHeight     = $maxheight;
+                            $result                    = $imgHandler->resizeImage();
+                            if ('copy' === $result) {
+                                \copy($largeFile, $thumbFile);
+                            }
+                    } else {
+                        \copy($largeFile, $thumbFile);
+                    }
+                    $linksObj->setVar('link_logo', $savedFilename);
+                } else {
+                    $uploaderErrors .= '<br>' . $uploader->getErrors();
                 }
+            } else {
+                if ($filename > '') {
+                    $uploaderErrors .= '<br>' . $uploader->getErrors();
+                }
+                $linksObj->setVar('link_logo', Request::getString('link_logo'));
             }
         } else {
-                $linksObj->setVar('link_logo', Request::getString('link_logo'));
+            $linksObj->setVar('link_logo', Request::getString('link_logo'));
         }
         $linksObj->setVar('link_state', Request::getInt('link_state'));
         $linksObj->setVar('link_type', Request::getInt('link_type'));
         $linksObj->setVar('link_target', Request::getString('link_target'));
         $linksObj->setVar('link_submitter', Request::getInt('link_submitter'));
-        $linksObj->setVar('link_date_created', \strtotime(Request::getString('link_date_created')));
+        $linkDateCreated = Request::getString('link_date_created');
+        if ('' !== $linkDateCreated) {
+            $linkDateCreatedObj = \DateTime::createFromFormat(\_SHORTDATESTRING, $linkDateCreated);
+            if ($linkDateCreatedObj === false) {
+                // invalid date
+                \redirect_header('link.php?op=list', 2, \_AM_WGHOLIDAY_INVALID_DATE);
+            }
+            $linksObj->setVar('link_date_created', $linkDateCreatedObj->getTimestamp());
+        }
         // Insert Data
         if($linksHandler->insert($linksObj)) {
-            \redirect_header('link.php?op=list', 2, \_AM_WGLINKS_FORM_OK);
+            $savedLinkId = $linkId > 0 ? $linkId : $linksObj->getNewInsertedIdLink();
+            if ('' !== $uploaderErrors) {
+                \redirect_header('link.php?op=edit&link_id=' . $savedLinkId, 5, $uploaderErrors);
+            } else {
+                \redirect_header('link.php?op=list', 3, \_AM_WGLINKS_FORM_OK);
+            }
         }
         // Get Form
         $GLOBALS['xoopsTpl']->assign('error', $linksObj->getHtmlErrors());
@@ -165,7 +208,7 @@ switch($op) {
     break;
     case 'delete':
         $linksObj = $linksHandler->get($linkId);
-        if(isset($_REQUEST['ok']) && 1 == $_REQUEST['ok']) {
+        if(1 === Request::getInt('ok')) {
             if(!$GLOBALS['xoopsSecurity']->check()) {
                 \redirect_header('link.php', 3, \implode(', ', $GLOBALS['xoopsSecurity']->getErrors()));
             }
@@ -180,7 +223,7 @@ switch($op) {
 
     break;
     case 'order':
-        $lorder = Request::getInt('lorder');
+        $lorder = Request::getArray('lorder');
         for ($i = 0, $iMax = \count($lorder); $i < $iMax; $i++){
             $linksObj = $linksHandler->get($lorder[$i]);
             $linksObj->setVar('link_weight',$i+1);
