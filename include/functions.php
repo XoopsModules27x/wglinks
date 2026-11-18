@@ -20,26 +20,6 @@
 
 defined('XOOPS_ROOT_PATH') || exit('Restricted access');
 
-/***************Blocks**************
- * @param $cats
- * @return string
- */
-function wglinks_block_addCatSelect($cats): string
-{
-    $cat_sql = '';
-    if(\is_array($cats))
-    {
-        $cat_sql = '('.current($cats);
-        \array_shift($cats);
-        foreach($cats as $cat)
-        {
-            $cat_sql .= ','.$cat;
-        }
-        $cat_sql .= ')';
-    }
-    return $cat_sql;
-}
-
 function wglinksMetaKeywords($content): void
 {
     global $xoopsTpl, $xoTheme;
